@@ -150,7 +150,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
             # Process return temperature sensors
             for sensor in room.get("sensoren", []):
-                if "Rücklauf" in sensor.get("beschreibung", ""):
+                if (sensor.get("raumtemperatursensor", "") == False):
                     _LOGGER.debug("Adding return sensor %s for room %s", 
                                 sensor.get("name"), room_name)
                     sensors.append(
