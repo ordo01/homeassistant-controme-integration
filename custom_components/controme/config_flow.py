@@ -187,7 +187,7 @@ class ContromeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 base_url = user_input[CONF_API_URL]
                 if not base_url.startswith(("http://", "https://")):
                     base_url = f"http://{base_url}"
-                url = f"{base_url.rstrip('/')}/get/json/v1/1/temps/"
+                url = f"{base_url.rstrip('/')}/get/json/v1/{self._house_id}/temps/"
                 
                 async with session.get(
                     url,
