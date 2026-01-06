@@ -149,8 +149,7 @@ class ContromeClimate(CoordinatorEntity, ClimateEntity):
         session = async_get_clientsession(self.hass)
         # Remove trailing slash from base_url if present
         base_url = self._base_url.rstrip('/')
-        endpoint = f"{base_url}/set/json/v1/{self._house_id}/soll/{self._room_id}/"
-        
+        endpoint = f"{base_url}/set/json/v1/{self._house_id}/ziel/{self._room_id}/"        
         data = {
             "user": self._user,
             "password": self._password,
