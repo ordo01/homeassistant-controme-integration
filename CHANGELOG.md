@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.3 (2026-01-06)
+
+### Enhancements
+- **Make return sensor creation more robust**: Changed dependency for creating return sensor on translation to evaluation of flag "raumtemperatursensor".
+- **Temperature changes now temporary**: Changed the behavior of the target temperature setting to perform a temporary change with the default duration for a temporary change configured through the controme web UI.
+
+### Bug Fixes
+- **Removed hard coded house id**: Now the hard coded house id is removed in all places.
+
 ## 1.1.2 (2025-03-19)
 
 ### Enhancements
@@ -15,4 +24,4 @@
 ### Under the Hood
 - **Code Optimization**: Streamlined the entity update process to minimize server requests
 - **Better Error Reporting**: More detailed error information in logs
-- **Coordinator Improvements**: Enhanced the DataUpdateCoordinator with better timing metrics 
+- **Coordinator Improvements**: Enhanced the DataUpdateCoordinator with better timing metrics             
