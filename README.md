@@ -4,7 +4,7 @@
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]](LICENSE)
 
-![Integration Example](https://github.com/flame4ever/homeassistant-controme-integration/blob/main/Example.png)
+![Integration Example](https://github.com/ordo01/homeassistant-controme-integration/blob/main/Example.png)
 
 Home Assistant integration for Controme heating systems. This integration allows you to control and monitor your Controme heating system through Home Assistant.
 
@@ -68,13 +68,13 @@ For each room, the integration creates:
 ## Support
 
 If you have any issues or feature requests, please:
-1. Check the [Issues](https://github.com/flame4ever/homeassistant-controme-integration/issues) page
+1. Check the [Issues](https://github.com/ordo01/homeassistant-controme-integration/issues) page
 2. Create a new issue if your problem isn't already listed
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-[releases-shield]: https://img.shields.io/github/release/flame4ever/homeassistant-controme-integration.svg
+[releases-shield]: https://img.shields.io/github/release/ordo01/homeassistant-controme-integration.svg
 [releases]: https://github.com/flame4ever/homeassistant-controme-integration/releases
-[license-shield]: https://img.shields.io/github/license/flame4ever/homeassistant-controme-integration.svg
+[license-shield]: https://img.shields.io/github/license/ordo01/homeassistant-controme-integration.svg
