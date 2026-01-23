@@ -153,7 +153,8 @@ class ContromeClimate(CoordinatorEntity, ClimateEntity):
         data = {
             "user": self._user,
             "password": self._password,
-            "soll": str(float(temperature))
+            "ziel": str(float(temperature)),
+            "duration": "default"
         }
         
         try:
