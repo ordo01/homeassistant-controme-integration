@@ -1,6 +1,7 @@
 name: "Release"
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -48,10 +49,15 @@ jobs:
             -x '.git/*' '.github/*' '.venv/*' '.pytest_cache/*' 'dist/*'
 
       - name: "Create the GitHub release"
-        uses: "softprops/action-gh-release@v2.2.1"
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: "Release ${{ steps.version.outputs.version }}"
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: ${{ github.workspace }}/dist/controme.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: "bash"
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" "${{ github.workspace }}/dist/controme.zip" --clobber
+          else
+            gh release create "${{ github.ref_name }}" "${{ github.workspace }}/dist/controme.zip" \
+              --title "Release $VERSION" \
+              --generate-notes
+          fi
