@@ -2,22 +2,48 @@
     "config": {
         "step": {
             "user": {
-                "title": "Controme Verbindung",
-                "description": "Geben Sie die Verbindungsdaten für Ihr Controme System ein",
+                "menu_options": {
+                    "auto_discovery": "Automatisch nach Controme-Systemen im Netzwerk suchen",
+                    "manual_entry": "IP-Adresse und Zugangsdaten manuell eingeben"
+                }
+            },
+            "credentials": {
+                "title": "Anmeldedaten f\u00fcr {system}",
+                "data": {
+                    "user": "Benutzername",
+                    "password": "Passwort",
+                    "haus_id": "Haus-ID"
+                }
+            },
+            "select_system": {
+                "title": "Controme System ausw\u00e4hlen",
+                "description": "{count} Systeme gefunden. Bitte w\u00e4hlen Sie eines aus:",
                 "data": {
                     "api_url": "API URL",
                     "user": "Benutzername",
-                    "password": "Passwort"
+                    "password": "Passwort",
+                    "haus_id": "Haus-ID"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Controme neu authentifizieren",
+                "description": "Aktualisieren Sie Ihre Zugangsdaten für {api_url}",
+                "data": {
+                    "user": "Benutzername",
+                    "password": "Passwort",
+                    "haus_id": "Haus-ID"
                 }
             }
         },
         "error": {
             "cannot_connect": "Verbindung fehlgeschlagen",
             "invalid_auth": "Ungültige Authentifizierung",
+            "invalid_duration": "Ungültige Dauer. Verwenden Sie 'default' oder eine positive Zahl.",
             "unknown": "Unerwarteter Fehler"
         },
         "abort": {
-            "already_configured": "Gerät ist bereits konfiguriert"
+            "already_configured": "Gerät ist bereits konfiguriert",
+            "reauth_successful": "Die Anmeldung wurde erfolgreich aktualisiert"
         }
     },
     "entity": {
@@ -60,9 +86,10 @@
                 },
                 "state": {
                     "heat": "Heizen",
+                    "cool": "Kühlen",
                     "off": "Aus"
                 }
             }
         }
     }
-} 
+}

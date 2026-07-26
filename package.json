@@ -1,6 +1,6 @@
 {
   "name": "controme",
-  "version": "0.1.0",
+  "version": "1.2.0",
   "description": "Home Assistant integration for Controme heating systems",
   "author": "flame4ever",
   "license": "MIT",

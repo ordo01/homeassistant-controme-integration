@@ -1,17 +1,24 @@
 """DataUpdateCoordinator for Controme integration."""
+
+import asyncio
 from datetime import timedelta
 import logging
 from typing import Any, Dict
 
+import aiohttp
 from aiohttp import ClientTimeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
 
+PERMISSIONS_ENDPOINT = "permissions"
+
 _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT = ClientTimeout(total=10)
+
 
 class ContromeDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
     """Class to manage fetching Controme data."""
@@ -21,6 +28,8 @@ class ContromeDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         hass: HomeAssistant,
         base_url: str,
         house_id: str,
+        username: str,
+        password: str,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -31,35 +40,101 @@ class ContromeDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         )
         self._base_url = base_url
         self._house_id = house_id
+        self._username = username
+        self._password = password
+        self.permissions: Dict[str, bool] = {
+            "can_make_permanent_changes": True,
+            "can_make_temporary_changes": True,
+        }
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from Controme API."""
-        session = async_get_clientsession(self.hass)
+        last_exception: Exception | None = None
         endpoint = f"{self._base_url}/get/json/v1/{self._house_id}/temps/"
+        permissions_endpoint = (
+            f"{self._base_url}/get/json/v1/{self._house_id}/{PERMISSIONS_ENDPOINT}/"
+        )
 
-        try:
-            start_time = self.hass.loop.time()
-            async with session.get(endpoint, timeout=REQUEST_TIMEOUT) as response:
-                if response.status != 200:
-                    raise UpdateFailed(f"Error fetching data: {response.status}")
-                data = await response.json()
-                
-            fetch_time = self.hass.loop.time() - start_time
-            _LOGGER.debug("Finished fetching controme data in %.3f seconds (success: True)", fetch_time)
-            
-            # Log a sample of the data for debugging
-            if data and isinstance(data, list) and len(data) > 0:
-                _LOGGER.debug("Received data for %d floors", len(data))
-                # Sample the first floor for debugging
-                first_floor = data[0]
-                if "raeume" in first_floor and first_floor["raeume"]:
-                    sample_room = first_floor["raeume"][0]
-                    # Log without sensitive values
-                    safe_sample = {k: v for k, v in sample_room.items() 
-                                if k not in ["password", "token"]}
-                    _LOGGER.debug("Sample room data: %s", safe_sample)
-            
-            return data
-        except Exception as ex:
-            _LOGGER.error("Error communicating with API: %s", str(ex))
-            raise UpdateFailed(f"Error communicating with API: {str(ex)}") 
+        for attempt in range(2):
+            try:
+                session = async_get_clientsession(self.hass)
+                auth = aiohttp.BasicAuth(self._username, self._password)
+                start_time = self.hass.loop.time()
+                async with session.get(
+                    endpoint, auth=auth, timeout=REQUEST_TIMEOUT
+                ) as response:
+                    if response.status == 401:
+                        raise ConfigEntryAuthFailed(
+                            "Authentication failed for Controme API"
+                        )
+                    if response.status != 200:
+                        msg = f"Error fetching data: {response.status}"
+                        if attempt == 0:
+                            _LOGGER.warning("%s (attempt 1/2, retrying...)", msg)
+                            await asyncio.sleep(2)
+                            continue
+                        raise UpdateFailed(msg)
+                    data = await response.json()
+
+                async with session.get(
+                    permissions_endpoint, auth=auth, timeout=REQUEST_TIMEOUT
+                ) as permissions_response:
+                    if permissions_response.status == 401:
+                        raise ConfigEntryAuthFailed(
+                            "Authentication failed for Controme API"
+                        )
+                    if permissions_response.status == 200:
+                        permissions_data = await permissions_response.json()
+                        self.permissions = {
+                            "can_make_permanent_changes": bool(
+                                permissions_data.get("can_make_permanent_changes", True)
+                            ),
+                            "can_make_temporary_changes": bool(
+                                permissions_data.get("can_make_temporary_changes", True)
+                            ),
+                        }
+                    else:
+                        _LOGGER.debug(
+                            "Permissions endpoint returned status %s; continuing with defaults",
+                            permissions_response.status,
+                        )
+
+                fetch_time = self.hass.loop.time() - start_time
+                _LOGGER.debug(
+                    "Finished fetching controme data in %.3f seconds (success: True)",
+                    fetch_time,
+                )
+
+                if data and isinstance(data, list) and len(data) > 0:
+                    _LOGGER.debug("Received data for %d floors", len(data))
+                    first_floor = data[0]
+                    if "raeume" in first_floor and first_floor["raeume"]:
+                        sample_room = first_floor["raeume"][0]
+                        safe_sample = {
+                            k: v
+                            for k, v in sample_room.items()
+                            if k not in ["password", "token"]
+                        }
+                        _LOGGER.debug("Sample room data: %s", safe_sample)
+
+                return data
+            except ConfigEntryAuthFailed:
+                raise
+            except UpdateFailed:
+                raise
+            except asyncio.TimeoutError:
+                last_exception = asyncio.TimeoutError("Request timed out")
+                _LOGGER.warning(
+                    "Timeout fetching Controme data (attempt %d/2)", attempt + 1
+                )
+                if attempt == 0:
+                    await asyncio.sleep(2)
+            except Exception as ex:
+                last_exception = ex
+                _LOGGER.warning(
+                    "Error communicating with API: %s (attempt %d/2)", ex, attempt + 1
+                )
+                if attempt == 0:
+                    await asyncio.sleep(2)
+
+        raise UpdateFailed(f"Error communicating with API: {last_exception}")

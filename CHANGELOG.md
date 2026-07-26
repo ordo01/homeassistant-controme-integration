@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 (2027-07-24)
+
+### Enhancements
+- **Rewrite of the integration**: Rewrite of the integration to make it more robust and compliant with homeassistant integration developer guidelines.
+- **House ID configurable**: Make house id configurable.
+- **Added translations**: Added missing translations.
+- **Duration for temperature change configurable**: Added configuration option for duration of temporary temperature changes.
+
 ## 1.1.3 (2026-01-06)
 
 ### Enhancements
@@ -24,4 +32,4 @@
 ### Under the Hood
 - **Code Optimization**: Streamlined the entity update process to minimize server requests
 - **Better Error Reporting**: More detailed error information in logs
-- **Coordinator Improvements**: Enhanced the DataUpdateCoordinator with better timing metrics             
+- **Coordinator Improvements**: Enhanced the DataUpdateCoordinator with better timing metrics

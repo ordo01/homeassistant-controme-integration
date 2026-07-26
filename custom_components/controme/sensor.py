@@ -1,7 +1,5 @@
 """Support for Controme sensors."""
 import logging
-from typing import Any
-from datetime import timedelta
 
 from homeassistant.components.sensor import (
     SensorEntity,
@@ -13,19 +11,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     UnitOfTemperature,
     PERCENTAGE,
+    EntityCategory,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from aiohttp import ClientTimeout
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DOMAIN, 
     CONF_API_URL, 
     CONF_HAUS_ID,
-    ENTITY_ID_MAP,
     VALUE_MAP,
     SENSOR_TYPE_OPERATION_MODE,
 )
@@ -33,8 +28,7 @@ from .const import (
 from dataclasses import dataclass
 
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(seconds=60)
-REQUEST_TIMEOUT = ClientTimeout(total=10)  # 10 Sekunden Timeout
+PARALLEL_UPDATES = 1
 
 @dataclass
 class ContromeSensorEntityDescription(SensorEntityDescription):
@@ -81,7 +75,7 @@ SENSOR_TYPES: tuple[ContromeSensorEntityDescription, ...] = (
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     """Set up the Controme sensor platform."""
     sensors = []
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = entry.runtime_data
     data = coordinator.data
     house_id = entry.data[CONF_HAUS_ID]
 
@@ -110,7 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             rooms = [floor]
             _LOGGER.debug("Using floor as room because no rooms found")
             
-        for room in rooms:
+        for index, room in enumerate(rooms):
             room_id = room.get("id")
             if not room_id:
                 room_id = f"{floor_id}_{index}"
@@ -151,17 +145,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             # Process return temperature sensors
             for sensor in room.get("sensoren", []):
                 if (sensor.get("raumtemperatursensor", "") == False):
-                    _LOGGER.debug("Adding return sensor %s for room %s", 
+                    _LOGGER.debug("Sensor value: %s (is_float: %s)", sensor.get("wert"), isinstance(sensor.get("wert"), float))
+                    if (isinstance(sensor.get("wert"), float)):
+                        _LOGGER.debug("Adding return sensor %s for room %s", 
                                 sensor.get("name"), room_name)
-                    sensors.append(
-                        ContromeSensor(
-                            coordinator,
-                            entry,
-                            room,
-                            f"return_{sensor.get('name')}",
-                            device_info,
+                        sensors.append(
+                            ContromeSensor(
+                                coordinator,
+                                entry,
+                                room,
+                                f"return_{sensor.get('name')}",
+                                device_info,
+                            )
                         )
-                    )
                     _LOGGER.debug("Return sensor added")
 
     _LOGGER.debug("Created %d sensors in total", len(sensors))
@@ -176,29 +172,9 @@ class ContromeSensor(CoordinatorEntity, SensorEntity):
         """Initialize the sensor description based on type."""
         base_type = sensor_type.split("_")[0]
         self.entity_description = next(
-            (desc for desc in SENSOR_TYPES if desc.key == base_type),
-            SENSOR_TYPES[0]  # Fallback to temperature sensor
+            (desc for desc in SENSOR_TYPES if desc.key == sensor_type or desc.key == base_type),
+            SENSOR_TYPES[0]
         )
-
-    def __init_entity_id(self, sensor_type: str, room_name: str) -> None:
-        """Initialize the entity ID."""
-        room_name_lower = room_name.lower().replace(" ", "_")
-        suffix = "return" if sensor_type.startswith("return_") else ENTITY_ID_MAP.get(sensor_type, sensor_type)
-        self.entity_id = f"sensor.controme_{room_name_lower}_{suffix}"
-
-    def __init_name(self, sensor_type: str) -> None:
-        """Initialize the sensor name."""
-        name_map = {
-            "current": "Temperatur",
-            "target": "Zieltemperatur",
-            "humidity": "Luftfeuchtigkeit",
-            "return": "Rücklauftemperatur",
-            "total_offset": "Temperaturanpassung",
-            "operation_mode": "Betriebsart"
-        }
-        base_type = sensor_type.split("_")[0]
-        lookup_key = sensor_type if sensor_type == "total_offset" else base_type
-        self._attr_name = name_map.get(lookup_key, sensor_type)
 
     def __init__(self, coordinator, config_entry, room_data, sensor_type, device_info):
         """Initialize the sensor."""
@@ -216,28 +192,25 @@ class ContromeSensor(CoordinatorEntity, SensorEntity):
         self._house_id = config_entry.data[CONF_HAUS_ID]
         self._base_url = config_entry.data[CONF_API_URL].rstrip('/')
         
-        # Set unique ID and entity ID
+        # Set unique ID
         self._attr_unique_id = f"{self._house_id}_{self._floor_id}_{self._room_id}_{sensor_type}"
         self.__init_sensor_description(sensor_type)
-        self.__init_entity_id(sensor_type, room_data.get("name", ""))
-        self.__init_name(sensor_type)
-        
+
+        if self._sensor_type.startswith("return_"):
+            self._attr_name = self._sensor_type[len("return_"):]
+
         # Set initial values
         self._update_from_data(room_data)
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self._attr_native_value is not None
 
     @property
     def device_info(self):
         """Return device info for this sensor."""
         return self._device_info
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
-        return {
-            "room_id": self._room_id,
-            "floor_id": self._floor_id,
-            "house_id": self._house_id,
-        }
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -257,34 +230,26 @@ class ContromeSensor(CoordinatorEntity, SensorEntity):
                 sensor_id = "_".join(self._sensor_type.split("_")[1:])
                 if sensor.get("name") == sensor_id:
                     value = sensor.get("wert")
-                    # Handle non-numeric values for numeric sensors
                     if isinstance(value, str) and not value.replace('.', '', 1).isdigit():
                         self._attr_native_value = None
-                        self._attr_available = False
                     else:
                         self._attr_native_value = value
-                        self._attr_available = True
                     break
         else:
             value = room_data.get(VALUE_MAP.get(self._sensor_type))
-            # For numeric sensors, ensure we have numeric values
             if self.entity_description.device_class in [
                 SensorDeviceClass.TEMPERATURE, 
                 SensorDeviceClass.HUMIDITY
             ]:
                 if not value or (isinstance(value, str) and not value.replace('.', '', 1).isdigit()):
                     self._attr_native_value = None
-                    self._attr_available = False
                 else:
                     try:
                         self._attr_native_value = float(value) if value is not None else None
-                        self._attr_available = True
                     except (ValueError, TypeError):
                         self._attr_native_value = None
-                        self._attr_available = False
             else:
                 self._attr_native_value = value
-                self._attr_available = value is not None
 
 class ContromeOperationModeSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Controme Operation Mode Sensor."""
@@ -301,11 +266,8 @@ class ContromeOperationModeSensor(CoordinatorEntity, SensorEntity):
         self._floor_id = room_data.get("floor_id")
         self._house_id = config_entry.data[CONF_HAUS_ID]
         
-        # Set unique ID and entity ID
+        # Set unique ID
         self._attr_unique_id = f"{self._house_id}_{self._floor_id}_{self._room_id}_operation_mode"
-        room_name = room_data.get("name", "")
-        room_name_lower = room_name.lower().replace(" ", "_")
-        self.entity_id = f"sensor.controme_{room_name_lower}_mode"
 
         # Set entity description
         self.entity_description = ContromeSensorEntityDescription(
@@ -315,13 +277,16 @@ class ContromeOperationModeSensor(CoordinatorEntity, SensorEntity):
             state_class=None,
             native_unit_of_measurement=None,
             has_entity_name=True,
+            entity_category=EntityCategory.DIAGNOSTIC,
         )
-
-        # Set name
-        self._attr_name = "Betriebsart"
 
         # Set initial value and availability
         self._update_from_data(room_data)
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self._attr_native_value is not None
 
     @property
     def device_info(self):
@@ -348,4 +313,3 @@ class ContromeOperationModeSensor(CoordinatorEntity, SensorEntity):
         """Update the sensor state from room data."""
         value = room_data.get(VALUE_MAP["operation_mode"])
         self._attr_native_value = value
-        self._attr_available = value is not None

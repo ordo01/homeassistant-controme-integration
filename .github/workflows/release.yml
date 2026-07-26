@@ -1,29 +1,55 @@
 name: "Release"
 
 on:
-  release:
-    types:
-      - "published"
+  push:
+    tags:
+      - "v*"
 
-permissions: {}
+permissions:
+  contents: write
 
 jobs:
   release:
     name: "Release"
     runs-on: "ubuntu-latest"
-    permissions:
-      contents: write
     steps:
       - name: "Checkout the repository"
         uses: "actions/checkout@v4.1.7"
 
-      - name: "ZIP the integration directory"
+      - name: "Derive the release version"
+        id: version
         shell: "bash"
         run: |
-          cd "${{ github.workspace }}/custom_components/controme"
-          zip controme.zip -r ./
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: "Upload the ZIP file to the release"
+      - name: "Update the integration manifest version"
+        shell: "bash"
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path("custom_components/controme/manifest.json")
+          manifest = json.loads(manifest_path.read_text())
+          manifest["version"] = os.environ["RELEASE_VERSION"]
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
+      - name: "Package the integration"
+        shell: "bash"
+        run: |
+          mkdir -p dist
+          cd "${{ github.workspace }}/custom_components/controme"
+          zip "${{ github.workspace }}/dist/controme.zip" -r ./
+
+      - name: "Create the GitHub release"
         uses: "softprops/action-gh-release@v2.2.1"
         with:
-          files: ${{ github.workspace }}/custom_components/controme/controme.zip
+          tag_name: ${{ github.ref_name }}
+          name: "Release ${{ steps.version.outputs.version }}"
+          generate_release_notes: true
+          files: ${{ github.workspace }}/dist/controme.zip
