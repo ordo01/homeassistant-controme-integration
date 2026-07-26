@@ -43,8 +43,9 @@ jobs:
         shell: "bash"
         run: |
           mkdir -p dist
-          cd "${{ github.workspace }}/custom_components/controme"
-          zip "${{ github.workspace }}/dist/controme.zip" -r ./
+          cd "${{ github.workspace }}"
+          zip -r "${{ github.workspace }}/dist/controme.zip" . \
+            -x '.git/*' '.github/*' '.venv/*' '.pytest_cache/*' 'dist/*'
 
       - name: "Create the GitHub release"
         uses: "softprops/action-gh-release@v2.2.1"
@@ -52,4 +53,5 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Release ${{ steps.version.outputs.version }}"
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: ${{ github.workspace }}/dist/controme.zip
