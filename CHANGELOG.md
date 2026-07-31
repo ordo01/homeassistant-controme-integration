@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0 (2027-07-24)
+## 1.2.0 (2027-07-31)
 
 ### Enhancements
 - **Rewrite of the integration**: Rewrite of the integration to make it more robust and compliant with homeassistant integration developer guidelines.
