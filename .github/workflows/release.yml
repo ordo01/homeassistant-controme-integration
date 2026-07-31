@@ -72,6 +72,8 @@ jobs:
               /^## / {
                 heading = $0
                 sub(/^## /, "", heading)
+                gsub(/\r/, "", heading)
+                sub(/[[:space:]]+\([^)]+\)$/, "", heading)
                 if (heading == version || heading == "v" version) {
                   in_target = 1
                   next
